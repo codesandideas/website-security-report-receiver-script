@@ -21,25 +21,35 @@
  */
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CONFIGURATION — Edit these values
+// CONFIGURATION — Values are loaded from .env (copy .env.example to .env)
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// Load .env file if present
+$env_file = __DIR__ . '/.env';
+if (file_exists($env_file)) {
+    foreach (file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        if ($line[0] === '#' || !str_contains($line, '=')) continue;
+        [$key, $val] = explode('=', $line, 2);
+        putenv(trim($key) . '=' . trim($val));
+    }
+}
 
 $config = [
     // Authentication
-    'api_key'           => 'CHANGE_THIS_TO_A_STRONG_RANDOM_KEY',
+    'api_key'           => getenv('API_KEY') ?: 'CHANGE_THIS_TO_A_STRONG_RANDOM_KEY',
 
     // Email settings
-    'from_name'         => 'Security Scanner',
-    'from_email'        => 'scanner@yourdomain.com',
-    'default_recipient' => 'admin@yourdomain.com',       // Fallback if no email in request
+    'from_name'         => getenv('FROM_NAME') ?: 'Security Scanner',
+    'from_email'        => getenv('FROM_EMAIL') ?: 'scanner@yourdomain.com',
+    'default_recipient' => getenv('DEFAULT_RECIPIENT') ?: 'admin@yourdomain.com',
 
-    // SMTP settings (leave smtp_enabled false to use PHP mail())
-    'smtp_enabled'      => false,
-    'smtp_host'         => 'smtp.gmail.com',
-    'smtp_port'         => 587,
-    'smtp_encryption'   => 'tls',                        // 'tls' or 'ssl'
-    'smtp_username'     => '',
-    'smtp_password'     => '',                            // Use App Password for Gmail
+    // SMTP settings (set SMTP_ENABLED=true in .env to use SMTP, otherwise PHP mail() is used)
+    'smtp_enabled'      => filter_var(getenv('SMTP_ENABLED') ?: 'false', FILTER_VALIDATE_BOOLEAN),
+    'smtp_host'         => getenv('SMTP_HOST') ?: 'smtp.gmail.com',
+    'smtp_port'         => (int)(getenv('SMTP_PORT') ?: 587),
+    'smtp_encryption'   => getenv('SMTP_ENCRYPTION') ?: 'tls',           // 'tls' or 'ssl'
+    'smtp_username'     => getenv('SMTP_USERNAME') ?: '',
+    'smtp_password'     => getenv('SMTP_PASSWORD') ?: '',
 
     // Security
     'allowed_ips'       => [],                            // Empty = allow all. Ex: ['1.2.3.4']
