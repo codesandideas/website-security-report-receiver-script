@@ -16,59 +16,73 @@ A standalone PHP endpoint that receives security scan reports via POST and deliv
 - Web server (Apache, Nginx, or similar)
 - Mail server or SMTP credentials (for email delivery)
 ## 🚀 Installation
-1. **Upload the script** to your web server:
+1. **Upload the files** to your web server:
    ```bash
-   # Upload website-security-script.sh to your server
-   scp website-security-script.sh user@yourserver.com:/var/www/html/security-receiver.php
+   scp receiver.php .env.example user@yourserver.com:/var/www/html/security-receiver/
    ```
-2. **Set appropriate permissions**:
+2. **Set file permissions** so only the web server can read them:
    ```bash
-   chmod 640 /var/www/html/security-receiver.php
+   chown ubuntu:www-data /var/www/html/security-receiver/receiver.php
+   chmod 640 /var/www/html/security-receiver/receiver.php
    ```
-3. **Create reports directory** (if using local storage):
+3. **Create and configure your `.env` file** (see Configuration section below):
    ```bash
-   mkdir /var/www/html/security-reports
-   chmod 750 /var/www/html/security-reports
+   cp .env.example .env
+   nano .env
+   chown ubuntu:www-data .env
+   chmod 640 .env
    ```
-4. **Configure the script** (see Configuration section below)
+4. **Create the reports directory** (if using local storage):
+   ```bash
+   mkdir security-reports
+   chown ubuntu:www-data security-reports
+   chmod 770 security-reports
+   ```
 ## ⚙️ Configuration
-Edit the `$config` array at the top of the script:
-### Authentication
-```php
-'api_key' => 'CHANGE_THIS_TO_A_STRONG_RANDOM_KEY',
+All credentials and settings are stored in a `.env` file — **never commit this file to version control**.
+
+Copy the example file and edit it:
+```bash
+cp .env.example .env
 ```
-**Important**: Change this to a strong, random string before deployment.
-### Email Settings
-```php
-'from_name'         => 'Security Scanner',
-'from_email'        => 'scanner@yourdomain.com',
-'default_recipient' => 'admin@yourdomain.com',  // Fallback if no email in request
+
+### `.env` reference
+```dotenv
+# Authentication — use a long random string
+API_KEY=CHANGE_THIS_TO_A_STRONG_RANDOM_KEY
+
+# Email sender identity
+FROM_NAME=Security Scanner
+FROM_EMAIL=scanner@yourdomain.com
+DEFAULT_RECIPIENT=admin@yourdomain.com
+
+# SMTP — set SMTP_ENABLED=true to use SMTP, false to fall back to PHP mail()
+SMTP_ENABLED=false
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_ENCRYPTION=tls
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
 ```
-### SMTP Configuration (Optional)
-To use SMTP instead of PHP's `mail()` function:
+
+### SMTP providers
+
+| Provider | Host | Port | Encryption |
+|----------|------|------|------------|
+| Gmail | `smtp.gmail.com` | `587` | `tls` |
+| ZeptoMail | `smtp.zeptomail.in` | `465` | `ssl` |
+| Mailgun | `smtp.mailgun.org` | `587` | `tls` |
+| SendGrid | `smtp.sendgrid.net` | `587` | `tls` |
+
+**Gmail**: Enable 2FA then generate an [App Password](https://support.google.com/accounts/answer/185833) — use that as `SMTP_PASSWORD`, not your account password.
+
+### Security & storage settings
+These are set directly in `receiver.php` (not sensitive, safe to commit):
 ```php
-'smtp_enabled'   => true,
-'smtp_host'      => 'smtp.gmail.com',
-'smtp_port'      => 587,
-'smtp_encryption' => 'tls',  // 'tls' or 'ssl'
-'smtp_username'  => 'your-email@gmail.com',
-'smtp_password'  => 'your-app-password',  // Use App Password for Gmail
-```
-**Gmail Setup**: For Gmail, you need to:
-1. Enable 2-factor authentication
-2. Generate an [App Password](https://support.google.com/accounts/answer/185833)
-3. Use the App Password in the configuration
-### Security Settings
-```php
-'allowed_ips'    => [],           // Empty = allow all. Ex: ['1.2.3.4', '5.6.7.8']
-'rate_limit'     => 10,           // Max requests per hour per IP
-'max_payload_mb' => 10,           // Max POST size in MB
-```
-### Storage Settings
-```php
-'save_reports' => true,                              // Save reports to disk
-'report_dir'   => __DIR__ . '/security-reports',    // Directory for reports
-'log_file'     => __DIR__ . '/security-receiver.log', // Log file path
+'allowed_ips'    => [],   // Empty = allow all. Ex: ['1.2.3.4', '5.6.7.8']
+'rate_limit'     => 10,   // Max requests per hour per IP
+'max_payload_mb' => 10,   // Max POST size in MB
+'save_reports'   => true, // Save reports to disk
 ```
 ## 📤 Usage
 ### Testing the Endpoint
@@ -194,14 +208,15 @@ The report converter supports:
 - **Horizontal rules** (`---`)
 - **Details/Summary** (`<details><summary>...</summary>...</details>`)
 ## 🛡️ Security Considerations
-1. **Change the default API key** immediately after installation
-2. **Use HTTPS** to encrypt data in transit
-3. **Restrict file permissions**: `chmod 640` on the PHP file
-4. **Enable IP whitelisting** if possible
-5. **Review rate limits** based on your expected traffic
-6. **Secure the reports directory** with `.htaccess` (automatically created)
-7. **Monitor logs** regularly for suspicious activity
-8. **Use App Passwords** for Gmail SMTP (not your account password)
+1. **Never commit `.env`** — it contains your API key and SMTP password. It is listed in `.gitignore` by default
+2. **Use a strong API key** — generate one with `openssl rand -hex 32`
+3. **Use HTTPS** to encrypt data in transit
+4. **Restrict file permissions**: `chmod 640` on `receiver.php` and `.env`, with group set to your web server user
+5. **Enable IP whitelisting** if your scanner runs from a fixed IP
+6. **Review rate limits** based on your expected traffic
+7. **Secure the reports directory** with `.htaccess` (automatically created)
+8. **Monitor logs** regularly for suspicious activity
+9. **Use App Passwords** for Gmail SMTP (not your account password)
 ## 📊 Logging
 Logs are stored in the file specified by `$config['log_file']` (default: `security-receiver.log`)
 Log format:
@@ -211,39 +226,55 @@ Log format:
 [2024-02-19 10:30:46] [INFO] [192.168.1.100] Saved: scan_web01_2024-02-19_10-30-45.md
 ```
 ## 🐛 Troubleshooting
+### 500 Internal Server Error
+**Problem**: Script returns 500 on any request
+**Solutions**:
+1. Check file permissions — the web server user must be able to read `receiver.php`:
+   ```bash
+   chown ubuntu:www-data receiver.php && chmod 640 receiver.php
+   ```
+2. Check server error logs: `tail -f /var/log/apache2/error.log`
+3. Verify PHP syntax: `php -l receiver.php`
+
 ### Email Not Sending
 **Problem**: Email delivery fails
 **Solutions**:
-1. Check PHP's `mail()` configuration: `php -i | grep mail`
-2. Verify SMTP credentials if using SMTP
+1. Confirm `.env` exists and `SMTP_ENABLED=true` is set
+2. Verify SMTP credentials in `.env` are correct
 3. Check error logs: `tail -f security-receiver.log`
 4. For Gmail: Ensure you're using an App Password, not your account password
-5. Test with a simple PHP mail script to isolate the issue
+5. Test SMTP connectivity: `openssl s_client -connect smtp.yourhost.com:465`
+
 ### 401 Unauthorized
 **Problem**: API key rejected
 **Solutions**:
-1. Verify the API key matches exactly (case-sensitive)
-2. Check for whitespace or encoding issues
+1. Confirm `API_KEY` in `.env` matches the key sent in the request (case-sensitive)
+2. Check for leading/trailing whitespace in `.env`
 3. Review logs for authentication attempts
+
 ### 429 Rate Limited
 **Problem**: Too many requests
 **Solutions**:
-1. Increase `rate_limit` in config
-2. Wait one hour for the rate limit to reset
-3. Check `/tmp/secrecv_rate_*` files for rate limit data
+1. Increase `rate_limit` in `receiver.php`
+2. Wait one hour for the rate limit window to reset
+3. Check `/tmp/secrecv_rate_*` files for rate limit state
+
 ### Reports Not Saved
 **Problem**: `saved: false` in response
 **Solutions**:
-1. Ensure `save_reports` is `true`
-2. Check directory permissions: `chmod 750 security-reports`
-3. Verify web server has write access to the directory
-4. Check disk space: `df -h`
+1. Ensure `save_reports` is `true` in `receiver.php`
+2. Fix directory ownership and permissions:
+   ```bash
+   chown ubuntu:www-data security-reports && chmod 770 security-reports
+   ```
+3. Check disk space: `df -h`
+
 ### IP Blocked
 **Problem**: 403 Forbidden
 **Solutions**:
-1. Add your IP to `allowed_ips` array
-2. Set `allowed_ips` to empty array `[]` to allow all IPs
-3. Check proxy/load balancer configuration for correct IP forwarding
+1. Add your IP to the `allowed_ips` array in `receiver.php`
+2. Set `allowed_ips` to `[]` to allow all IPs
+3. Check proxy/load balancer config for correct IP forwarding
 ## 📝 File Storage Structure
 When `save_reports` is enabled, reports are saved as:
 ```
