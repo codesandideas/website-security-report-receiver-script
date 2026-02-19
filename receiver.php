@@ -104,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         'accepts'  => 'POST with JSON body',
         'required' => ['api_key', 'report'],
         'optional' => ['email', 'hostname', 'scan_target', 'risk_level', 'frameworks',
-                        'total_issues', 'critical', 'high', 'medium', 'low', 'info'],
+                        'total_issues', 'critical', 'high', 'medium', 'low', 'info', 'email_summary'],
     ]);
 }
 
@@ -174,6 +174,7 @@ $high         = intval($data['high'] ?? 0);
 $medium       = intval($data['medium'] ?? 0);
 $low          = intval($data['low'] ?? 0);
 $info         = intval($data['info'] ?? 0);
+$email_summary = $data['email_summary'] ?? '';
 $scan_date    = date('F j, Y \a\t H:i:s T');
 
 write_log("Report received: {$hostname} | Risk: {$risk_level} | Issues: {$total_issues} (C:{$critical} H:{$high} M:{$medium})");
@@ -290,7 +291,9 @@ $risk_colors = [
 ];
 $c = $risk_colors[strtoupper($risk_level)] ?? $risk_colors['MEDIUM'];
 
-$report_html = md_to_html($report);
+// Use email_summary for the mail body if available, otherwise fall back to full report
+$body_content = !empty($email_summary) ? $email_summary : $report;
+$report_html = md_to_html($body_content);
 
 $email_html = <<<HTML
 <!DOCTYPE html>
